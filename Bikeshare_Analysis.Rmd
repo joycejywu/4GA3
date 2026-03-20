@@ -1,0 +1,101 @@
+---
+title: "Bikeshare.V1"
+output: html_document
+date: "2026-03-18"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r message=FALSE, warning=FALSE}
+library(isdas)
+library(gstat)
+library(sf)
+library(spdep)
+library(tidyverse)
+library(readxl)
+library(opendatatoronto)
+library(dplyr)
+```
+
+# Adding Neighbourhood Geographies
+```{r}
+package <- show_package("fc443770-ef0a-4025-9c2c-2cb558bfab00")
+package
+```
+
+```{r}
+resources <- list_package_resources("fc443770-ef0a-4025-9c2c-2cb558bfab00")
+	
+datastore_resources <- filter(resources, tolower(format) %in% c('csv', 'geojson'))
+
+torontonbh <- filter(datastore_resources, row_number()==1) %>% get_resource()
+```
+
+# Adding Neighbourhood Profiles
+```{r}
+nbhdata <- read_xlsx("neighbourhood-profiles-2021-158-model.xlsx")
+```
+
+# Swapping Rows and Columns of Neighbourhood Profiles. Processing Columns of Interest.
+```{r}
+nbhdata_transpose <- data.frame(t(nbhdata[-1]))
+
+#Renaming Columns of Interest
+nbhdata_transpose <- rename(nbhdata_transpose, "AREA_SHORT_CODE" = 1)
+nbhdata_transpose <- rename(nbhdata_transpose, "MEDIAN_AGE" = 35)
+nbhdata_transpose <- rename(nbhdata_transpose, "MEDIAN_INCOME_2020" = 63)
+
+#Making Columns of Interest Numeric for Analysis
+nbhdata_transpose <- nbhdata_transpose %>%
+  mutate(MEDIAN_AGE = as.numeric(as.character(MEDIAN_AGE)))
+nbhdata_transpose <- nbhdata_transpose %>%
+  mutate(MEDIAN_INCOME_2020 = as.numeric(as.character(MEDIAN_INCOME_2020)))
+```
+```{r}
+nbhdata_transpose
+```
+# Joining nbhdata to torontonbh geometries
+```{r}
+torontodata <- left_join(torontonbh, nbhdata_transpose, by = "AREA_SHORT_CODE")
+torontodata
+```
+
+# Adding Bike Station Data
+```{r}
+bstations <- read_xlsx("Toronto_Bikeshare_Stations.xlsx")
+```
+
+```{r}
+summary(bstations)
+head(bstations)
+```
+
+# Creating Bike Share Geography from Data
+```{r}
+bstations.sf<- st_as_sf(x = bstations, coords = c("X", "Y"), crs = 4326)
+```
+
+# Plotting Bike Share Points and Neighbourhood Map
+```{r}
+ggplot() +
+  geom_sf(data = torontodata, colour ="black", fill = NA, alpha = 1, size = .3)  +
+  geom_sf(data = bstations.sf) +
+  coord_sf()
+```
+# Plotting Median Income on Toronto Map
+```{r}
+ggplot(torontodata) + 
+  geom_sf(aes(fill = cut_number(MEDIAN_INCOME_2020, 5)), color = NA, size = 0.1) +
+    geom_sf(data = torontonbh, colour ="black", fill= NA, alpha = 1, size = .3) +
+  scale_fill_brewer(palette = "YlOrRd") +
+  coord_sf() +
+  labs(fill = "Median Income in 2020")
+```
