@@ -50,10 +50,16 @@ nbhdata_transpose <- data.frame(t(nbhdata[-1]))
 
 #Renaming Columns of Interest
 nbhdata_transpose <- rename(nbhdata_transpose, "AREA_SHORT_CODE" = 1)
+nbhdata_transpose <- rename(nbhdata_transpose, "TOTAL_POPULATION" = 3)
+nbhdata_transpose <- rename(nbhdata_transpose, "EMPLOYMENT_RATE" = 1970)
 nbhdata_transpose <- rename(nbhdata_transpose, "MEDIAN_AGE" = 35)
 nbhdata_transpose <- rename(nbhdata_transpose, "MEDIAN_INCOME_2020" = 63)
 
 #Making Columns of Interest Numeric for Analysis
+nbhdata_transpose <- nbhdata_transpose %>%
+  mutate(TOTAL_POPULATION = as.numeric(as.character(TOTAL_POPULATION)))
+nbhdata_transpose <- nbhdata_transpose %>%
+  mutate(EMPLOYMENT_RATE = as.numeric(as.character(EMPLOYMENT_RATE)))
 nbhdata_transpose <- nbhdata_transpose %>%
   mutate(MEDIAN_AGE = as.numeric(as.character(MEDIAN_AGE)))
 nbhdata_transpose <- nbhdata_transpose %>%
@@ -65,12 +71,22 @@ nbhdata_transpose
 # Joining nbhdata to torontonbh geometries
 ```{r}
 torontodata <- left_join(torontonbh, nbhdata_transpose, by = "AREA_SHORT_CODE")
-torontodata
 ```
+# Calculating Population Density (numbers looking crazy)
+```{r}
+torontodata <- torontodata %>%
+  mutate (AREA_SQKM = st_area(geometry))
+units(torontodata$AREA_SQKM) <- "km^2"
+torontodata <- torontodata %>%
+  mutate(AREA_SQKM = as.numeric(as.character(AREA_SQKM)))
+torontodata <- torontodata %>%
+  mutate (POP_DEN = TOTAL_POPULATION/AREA_SQKM)
+```
+
 
 # Adding Bike Station Data
 ```{r}
-bstations <- read_xlsx("Toronto_Bikeshare_Stations.xlsx")
+bstations <- read_xlsx("Toronto_Bikeshare_Stations_21_03.xlsx")
 ```
 
 ```{r}
@@ -90,7 +106,16 @@ ggplot() +
   geom_sf(data = bstations.sf) +
   coord_sf()
 ```
-# Plotting Median Income on Toronto Map
+# Plotting Employment Rate
+```{r}
+ggplot(torontodata) + 
+  geom_sf(aes(fill = cut_number(EMPLOYMENT_RATE, 5)), color = NA, size = 0.1) +
+    geom_sf(data = torontonbh, colour ="black", fill= NA, alpha = 1, size = .3) +
+  scale_fill_brewer(palette = "YlOrRd") +
+  coord_sf() +
+  labs(fill = "Employment Rate in 2020")
+```
+# Median Income in 2020
 ```{r}
 ggplot(torontodata) + 
   geom_sf(aes(fill = cut_number(MEDIAN_INCOME_2020, 5)), color = NA, size = 0.1) +
@@ -98,4 +123,24 @@ ggplot(torontodata) +
   scale_fill_brewer(palette = "YlOrRd") +
   coord_sf() +
   labs(fill = "Median Income in 2020")
+```
+
+# Median Age in 2020
+```{r}
+ggplot(torontodata) + 
+  geom_sf(aes(fill = cut_number(MEDIAN_AGE, 5)), color = NA, size = 0.1) +
+    geom_sf(data = torontonbh, colour ="black", fill= NA, alpha = 1, size = .3) +
+  scale_fill_brewer(palette = "YlOrRd") +
+  coord_sf() +
+  labs(fill = "Median Age in 2020")
+```
+
+# POP_DEN in 2020
+```{r}
+ggplot(torontodata) + 
+  geom_sf(aes(fill = cut_number(POP_DEN, 5)), color = NA, size = 0.1) +
+    geom_sf(data = torontonbh, colour ="black", fill= NA, alpha = 1, size = .3) +
+  scale_fill_brewer(palette = "YlOrRd") +
+  coord_sf() +
+  labs(fill = "Population Density")
 ```
