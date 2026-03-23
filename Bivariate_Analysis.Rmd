@@ -1,0 +1,268 @@
+---
+title: "Bivariate_Analysis"
+output: html_document
+date: 03.23.2026
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+```{r}
+install.packages("writexl")
+install.packages("rgeoda")
+```
+
+```{r message=FALSE, warning=FALSE}
+library(isdas)
+library(gstat)
+library(sf)
+library(spdep)
+library(tidyverse)
+library(readxl)
+library(opendatatoronto)
+library(dplyr)
+library(jsonlite)
+library(writexl)
+library(ggplot2)
+library(rgeoda)
+```
+
+
+```{r}
+#transpose so rows = cols
+df_transposed <-nbhdata %>%
+    t() %>%
+    as.data.frame()
+
+colnames(df_transposed) <- df_transposed[1, ]
+df_transposed <-df_transposed[-1, ]
+
+df_transposed[] <- lapply(df_transposed, type.convert, as.is = TRUE)
+
+df_transposed
+```
+# centroids
+```{r}
+df_transposed_sf <- st_as_sf(torontonbh$geometry,
+                             coords = c("longitude", "latitude"),
+                             crs = 4326)
+
+
+nbh_centroids <- st_centroid(df_transposed_sf)
+
+```
+
+#Distance to bikeshare hub
+```{r}
+dist_matrix_age <-st_distance(nbh_centroids, stations_sf)
+
+df_transposed_sf$dist_to_nearest_hub <- apply(dist_matrix_age, 1, min)
+
+summary(df_transposed_sf$dist_to_nearest_hub)
+
+ggplot(torontonbh) +
+  geom_sf(aes(fill = df_transposed_sf$dist_to_nearest_hub)) +
+  scale_fill_viridis_c(option = "magma", direction = -1) +
+  geom_sf(data = stations_sf, color = "black", size = 1.5) +
+  labs(title = "Distance to Nearest Bikeshare Hub by Neighbourhood",
+       fill = "Distance (m)") +
+  theme_minimal()
+
+```
+
+
+```{r}
+#renaming median income col for readability
+
+names(df_transposed)[164] <- "MI"
+
+```
+
+```{r}
+
+MI_vector <- df_transposed$MI #creates vector
+```
+
+```{r, eval=FALSE}
+#creating MI_vector to a df
+MI_df <- data.frame(MI_vector)
+```
+
+
+```{r}
+#adding MI from df_trans to df_trans_sf 
+df_transposed_sf$MI <- MI_df
+
+names(df_transposed_sf)[3] <- "MI"
+
+```
+
+
+#Bivariate Moran's I for bike access and median income
+```{r}
+weights_MI <- queen_weights(torontodata)
+
+lisa_MI <- local_bimoran(weights_MI,
+                          df_transposed_sf[c("MI", "dist_to_nearest_hub")])
+
+df_transposed_sf$lisa_cluster <- lisa_clusters(lisa_MI)
+df_transposed_sf$lisa_pvalue <-lisa_pvalues(lisa_MI)
+```
+
+
+```{r}
+class(df_transposed_sf)
+```
+
+
+```{r}
+df_transposed_sf <-df_transposed_sf %>%
+  mutate(cluster_label = case_when(
+    lisa_pvalue > 0.05 ~ "Not Sig",
+    lisa_cluster == 1 ~ "HH",
+    lisa_cluster == 2 ~ "LL",
+    lisa_cluster == 3 ~ "HL",
+    lisa_cluster == 4 ~ "LH",
+    TRUE              ~ "Not sig"
+  ))
+
+ggplot(df_transposed_sf) +
+  geom_sf(aes(fill = cluster_label)) + 
+  scale_fill_manual(values = c("HH" = "#a3b18a","LL" = "#e9edc9","HL" = "#fefae0","LH" = "#606c38","Not sig" = "#faedcd")) + 
+  labs(title = "BV LISA_MI",
+       fill = "Cluster Type") +
+  theme_minimal()
+```
+
+```{r, eval=FALSE}
+#renaming median income col for readability
+names(df_transposed)[35] <- "AGE"
+
+AGE_vector <- df_transposed$AGE #creates vector
+```
+
+```{r, eval=FALSE}
+#creating MI_vector to a df
+AGE_df <- data.frame(AGE_vector)
+```
+
+```{r, eval=FALSE}
+#adding MI from df_trans to df_trans_sf 
+df_transposed_sf$AGE <- AGE_df
+
+names(df_transposed_sf)[9] <- "AGE"
+```
+
+
+```{r}
+# Step 1: extract vector directly (skip the data.frame() step entirely)
+AGE_vector <- df_transposed$AGE
+
+# Step 2: add as vector directly
+df_transposed_sf$AGE <- AGE_vector
+
+# Step 3: now local_bimoran will find the column correctly
+weights_AGE <- queen_weights(torontodata)
+
+lisa_AGE <- local_bimoran(weights_AGE,
+                          df_transposed_sf[c("AGE", "dist_to_nearest_hub")])
+
+df_transposed_sf$lisa_cluster <- lisa_clusters(lisa_AGE)
+df_transposed_sf$lisa_pvalue  <- lisa_pvalues(lisa_AGE)
+```
+
+#Bivariate Moran's I for bike access and age
+```{r}
+weights_AGE <- queen_weights(torontodata)
+
+lisa_AGE <- local_bimoran(weights_AGE,
+                          df_transposed_sf[c("AGE", "dist_to_nearest_hub")])
+
+df_transposed_sf$lisa_cluster <- lisa_clusters(lisa_AGE)
+df_transposed_sf$lisa_pvalue <-lisa_pvalues(lisa_AGE)
+```
+
+```{r}
+#checks if output = sf or data.frame (anything else = overwritten)
+class(df_transposed_sf)
+```
+
+```{r}
+df_transposed_sf <-df_transposed_sf %>%
+  mutate(cluster_label = case_when(
+    lisa_pvalue > 0.05 ~ "Not Sig",
+    lisa_cluster == 1 ~ "HH",
+    lisa_cluster == 2 ~ "LL",
+    lisa_cluster == 3 ~ "HL",
+    lisa_cluster == 4 ~ "LH",
+    TRUE              ~ "Not sig"
+  ))
+
+ggplot(df_transposed_sf) +
+  geom_sf(aes(fill = cluster_label)) + 
+  scale_fill_manual(values = c("HH" = "#a3b18a","LL" = "#e9edc9","HL" = "#fefae0","LH" = "#606c38","Not sig" = "#faedcd")) + 
+  labs(title = "BV LISA_AGE",
+       fill = "Cluster Type") +
+  theme_minimal()
+```
+--
+
+#employment rate
+```{r}
+names(df_transposed)[1966] <- "ER"
+
+# Step 1: extract vector directly (skip the data.frame() step entirely)
+ER_vector <- df_transposed$ER
+
+# Step 2: add as vector directly
+df_transposed_sf$ER <- ER_vector
+
+# Step 3: now local_bimoran will find the column correctly
+weights_ER <- queen_weights(torontodata)
+
+lisa_ER <- local_bimoran(weights_ER,
+                          df_transposed_sf[c("ER", "dist_to_nearest_hub")])
+
+df_transposed_sf$lisa_cluster <- lisa_clusters(lisa_ER)
+df_transposed_sf$lisa_pvalue  <- lisa_pvalues(lisa_ER)
+```
+
+#Bivariate Moran's I for bike access and ER
+```{r}
+weights_ER <- queen_weights(torontodata)
+
+lisa_ER <- local_bimoran(weights_ER,
+                          df_transposed_sf[c("ER", "dist_to_nearest_hub")])
+
+df_transposed_sf$lisa_cluster <- lisa_clusters(lisa_ER)
+df_transposed_sf$lisa_pvalue <-lisa_pvalues(lisa_ER)
+```
+
+```{r}
+df_transposed_sf <-df_transposed_sf %>%
+  mutate(cluster_label = case_when(
+    lisa_pvalue > 0.05 ~ "Not Sig",
+    lisa_cluster == 1 ~ "HH",
+    lisa_cluster == 2 ~ "LL",
+    lisa_cluster == 3 ~ "HL",
+    lisa_cluster == 4 ~ "LH",
+    TRUE              ~ "Not sig"
+  ))
+
+ggplot(df_transposed_sf) +
+  geom_sf(aes(fill = cluster_label)) + 
+  scale_fill_manual(values = c("HH" = "#a3b18a","LL" = "#e9edc9","HL" = "#fefae0","LH" = "#606c38","Not sig" = "#faedcd")) + 
+  labs(title = "BV LISA_ER",
+       fill = "Cluster Type") +
+  theme_minimal()
+```
+
+-- 
+
+```{r}
