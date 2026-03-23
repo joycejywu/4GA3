@@ -23,6 +23,10 @@ library(tidyverse)
 library(readxl)
 library(opendatatoronto)
 library(dplyr)
+library(jsonlite)
+library(writexl)
+library(ggplot2)
+
 ```
 
 # Adding Neighbourhood Geographies
@@ -72,7 +76,7 @@ nbhdata_transpose
 ```{r}
 torontodata <- left_join(torontonbh, nbhdata_transpose, by = "AREA_SHORT_CODE")
 ```
-# Calculating Population Density (numbers looking crazy)
+# Calculating Population Density 
 ```{r}
 torontodata <- torontodata %>%
   mutate (AREA_SQKM = st_area(geometry))
@@ -82,65 +86,244 @@ torontodata <- torontodata %>%
 torontodata <- torontodata %>%
   mutate (POP_DEN = TOTAL_POPULATION/AREA_SQKM)
 ```
-
-
-# Adding Bike Station Data
+Creating Spatial Weights for Toronto
 ```{r}
-bstations <- read_xlsx("Toronto_Bikeshare_Stations_21_03.xlsx")
+torontodata.nb <- poly2nb(pl = torontodata)
+torontodata.w <- nb2listw(torontodata.nb)
 ```
 
-```{r}
-summary(bstations)
-head(bstations)
-```
-
-# Creating Bike Share Geography from Data
-```{r}
-bstations.sf<- st_as_sf(x = bstations, coords = c("X", "Y"), crs = 4326)
-```
-
-# Plotting Bike Share Points and Neighbourhood Map
-```{r}
-ggplot() +
-  geom_sf(data = torontodata, colour ="black", fill = NA, alpha = 1, size = .3)  +
-  geom_sf(data = bstations.sf) +
-  coord_sf()
-```
 # Plotting Employment Rate
 ```{r}
-ggplot(torontodata) + 
+Emloyment_Rate_Map <- ggplot(torontodata) + 
   geom_sf(aes(fill = cut_number(EMPLOYMENT_RATE, 5)), color = NA, size = 0.1) +
-    geom_sf(data = torontonbh, colour ="black", fill= NA, alpha = 1, size = .3) +
-  scale_fill_brewer(palette = "YlOrRd") +
+  geom_sf(data = torontonbh, colour ="black", fill= NA, alpha = 1, size = .3) +
+  scale_fill_brewer(palette = "Blues") +
   coord_sf() +
-  labs(fill = "Employment Rate in 2020")
+  labs(fill = "Employment Rate (%)")
+
+Emloyment_Rate_Map
+
+moran.test(torontodata$EMPLOYMENT_RATE, torontodata.w)
 ```
+
 # Median Income in 2020
 ```{r}
-ggplot(torontodata) + 
-  geom_sf(aes(fill = cut_number(MEDIAN_INCOME_2020, 5)), color = NA, size = 0.1) +
-    geom_sf(data = torontonbh, colour ="black", fill= NA, alpha = 1, size = .3) +
-  scale_fill_brewer(palette = "YlOrRd") +
+Median_Income_Map <- ggplot(torontodata) + 
+  geom_sf(aes(fill = cut_number(MEDIAN_INCOME_2020/1000, 5)), color = NA, size = 0.1) +
+  geom_sf(data = torontonbh, colour ="black", fill= NA, alpha = 1, size = .3) +
+  scale_fill_brewer(palette = "Blues") +
   coord_sf() +
-  labs(fill = "Median Income in 2020")
+  labs(fill = "Median Income in 1000s of $")
+
+Median_Income_Map
+
+moran.test(torontodata$MEDIAN_INCOME_2020, torontodata.w)
 ```
 
 # Median Age in 2020
 ```{r}
-ggplot(torontodata) + 
+Median_Age_Map <- ggplot(torontodata) + 
   geom_sf(aes(fill = cut_number(MEDIAN_AGE, 5)), color = NA, size = 0.1) +
     geom_sf(data = torontonbh, colour ="black", fill= NA, alpha = 1, size = .3) +
-  scale_fill_brewer(palette = "YlOrRd") +
+  scale_fill_brewer(palette = "Blues") +
   coord_sf() +
   labs(fill = "Median Age in 2020")
+
+Median_Age_Map
+
+moran.test(torontodata$MEDIAN_AGE, torontodata.w)
 ```
 
 # POP_DEN in 2020
 ```{r}
-ggplot(torontodata) + 
+Pop_Den_Map <- ggplot(torontodata) + 
   geom_sf(aes(fill = cut_number(POP_DEN, 5)), color = NA, size = 0.1) +
     geom_sf(data = torontonbh, colour ="black", fill= NA, alpha = 1, size = .3) +
-  scale_fill_brewer(palette = "YlOrRd") +
+  scale_fill_brewer(palette = "Blues") +
   coord_sf() +
-  labs(fill = "Population Density")
+  labs(fill = "Population Density (pop/km2)")
+
+Pop_Den_Map
+
+moran.test(torontodata$POP_DEN, torontodata.w)
+```
+# Bike Share Utilization
+```{r}
+## Load JSON data 
+bike_json <- fromJSON("https://tor.publicbikesystem.net/ube/gbfs/v1/en/station_information.json")
+
+glimpse(bike_json) 
+
+## Load station status 
+status_json <- fromJSON("https://tor.publicbikesystem.net/ube/gbfs/v1/en/station_status.json")
+status <- status_json$data$stations
+
+glimpse(status)
+
+## Extract Stations Table
+stations <- bike_json$data$stations
+
+## Join info + live data 
+stations_full <- stations %>%
+  left_join(status, by = "station_id")
+
+glimpse(stations_full)
+
+## Inspect Dataset
+head(stations)
+View(stations)
+glimpse(stations)
+names(stations)
+
+## Export Raw data 
+write_xlsx(stations, "stations_full_raw.xlsx")
+
+## Clean Data
+stations_clean <- stations_full %>%
+  select(
+    station_id,
+    name,
+    lat,
+    lon,
+    capacity,
+    num_bikes_available,
+    num_docks_available,
+    groups
+  ) %>%
+  rename(
+    Station_ID = station_id,
+    Station_Name = name,
+    Latitude = lat,
+    Longitude = lon,
+    Capacity = capacity,
+    Bikes_Available = num_bikes_available,
+    Docks_Available = num_docks_available,
+    Area = groups
+  ) %>%
+  arrange(desc(Capacity))
+
+## Fix area from list to text 
+stations_clean <- stations_clean %>%
+  mutate(Area = map_chr(Area, ~ paste(.x, collapse = ", ")))
+
+## Region/Neighborhood 
+stations_clean <- stations_clean %>%
+  separate(Area, into = c("Region", "Neighbourhood"), sep = ", ")
+
+## Utilization of Stations 
+stations_clean <- stations_clean %>%
+  mutate(Utilization = (Bikes_Available / Capacity) * 100)
+# Shows how full each station is (% of bikes vs total capacity)
+
+## Timestamp of Data 
+stations_clean <- stations_clean %>%
+  mutate(Data_Collected = Sys.time())
+## Timestamp for File Name 
+timestamp <- format(max(stations_clean$Data_Collected), "%Y-%m-%d_%H-%M")
+
+## Export Clean Data 
+write_xlsx(stations_clean, "Toronto_Bikeshare_Stations.xlsx")
+
+## Convert to Spatial Data
+stations_sf <- st_as_sf(
+  stations_clean,
+  coords = c("Longitude", "Latitude"),
+  crs = 4326
+)
+
+## Save as GeoJSON for GIS use
+st_write(stations_sf, "Toronto_Bikeshare_Stations.geojson", delete_dsn = TRUE)
+
+```
+
+
+```{r}
+## Station Utilization Map
+station_utilization_map <- ggplot() +
+  geom_sf(data = torontodata, colour ="black", fill= NA, alpha = 1, size = .3) +
+  geom_sf(data = stations_sf, aes(color = Utilization), size = 2) +
+  scale_color_viridis_c() +
+  labs(
+    title = "Bike Share Station Utilization",
+    subtitle = paste("Data collected:", timestamp),
+    color = "Utilization (%)"
+  ) +
+  theme_minimal()
+
+station_utilization_map
+```
+
+
+```{r}
+## Station Utilization Map + Median Income
+utilization_income_map <- ggplot(torontodata) +
+  geom_sf(aes(fill = cut_number(MEDIAN_INCOME_2020, 5)), color = NA, size = 0.1) +
+  scale_fill_brewer(palette = "Blues") +
+  labs(
+    fill = "Median Income in 2020"
+  ) +
+  geom_sf(data = torontodata, colour ="black", fill= NA, alpha = 1, size = .3) +
+  geom_sf(data = stations_sf, aes(color = Utilization), size = 1, alpha = 0.5) +
+  scale_color_viridis_c() +
+  labs(
+    title = "Bike Share Station Utilization & Median Income in 2020",
+    subtitle = paste("Data collected:", timestamp),
+    color = "Utilization (%)"
+  ) +
+  theme_minimal()
+
+utilization_income_map
+```
+```{r}
+## Station Utilization Map + Median Age
+age_income_map <- ggplot(torontodata) +
+  geom_sf(aes(fill = cut_number(MEDIAN_AGE, 5)), color = NA, size = 0.1) +
+  scale_fill_brewer(palette = "Blues") +
+  labs(
+    fill = "Median Age"
+  ) +
+  geom_sf(data = torontodata, colour ="black", fill= NA, alpha = 1, size = .3) +
+  geom_sf(data = stations_sf, aes(color = Utilization), size = 1, alpha = 0.5) +
+  scale_color_viridis_c() +
+  labs(
+    title = "Bike Share Station Utilization & Median Age",
+    subtitle = paste("Data collected:", timestamp),
+    color = "Utilization (%)"
+  ) +
+  theme_minimal()
+
+age_income_map
+```
+
+
+```{r}
+# Station Counts in Each Neighbourhood
+station_intersect <- st_intersects(torontodata, stations_sf)
+station_counts <- lengths(station_intersect)
+torontodata$STATION_COUNT <- station_counts
+```
+
+```{r}
+# Station Map 
+station_count_map <- ggplot(torontodata) +
+  geom_sf(aes(fill = STATION_COUNT)) +
+  scale_fill_viridis_c() +
+  labs(
+    fill = "Number of Bike Share Stations"
+  ) +
+  geom_sf(data = torontodata, colour ="black", fill= NA, alpha = 1, size = .3) 
+
+station_count_map
+```
+
+```{r}
+# Station Map 2
+station_count_map2 <- ggplot(torontodata) +
+  geom_sf(aes(fill = cut_number(STATION_COUNT, 5)), color = NA, size = 0.1) +
+  geom_sf(data = torontonbh, colour ="black", fill= NA, alpha = 1, size = .3) +
+  scale_fill_brewer(palette = "Blues") +
+  coord_sf() +
+  labs(fill = "Number of Bike Share Stations")
+
+station_count_map2
 ```
