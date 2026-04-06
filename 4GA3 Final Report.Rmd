@@ -1,0 +1,84 @@
+---
+title: "Cycling Accessibility Across Toronto Neighbourhoods"
+author:
+- name: Julianna Filice (400457494)
+- name: Daniella Frost (400443436)
+- name: Jeewoo Kang (400455227)
+- name: Abigail Wilson (400460081)
+- name: Joyce Wu (400452669)
+subject: "ENVSOCTY 4GA3 - Applied Spatial Statistics"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+
+abstract: "This report is discussing our assessment of _____"
+
+keywords: "Bikeshare, accessibility, socioeconomic inequalities, spatial analysis"
+
+
+output:
+  pdf_document:
+    # The project-template-default.tex file was heavily  adapted from Steven V. Miller's template for academic manuscripts. See:
+    # http://svmiller.com/blog/2016/02/svm-r-markdown-manuscript/
+    # https://github.com/svmiller/svm-r-markdown-templates/blob/master/svm-latex-ms.tex
+    template: exercise-template-default.tex
+always_allow_html: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+rm(list = ls())
+```
+---
+<!--Use "#" for section headers-->
+
+#Introduction
+
+This is our introduction 
+
+
+#Background
+
+This is our background
+
+
+#Study Area
+
+This is our study area, why we chose this place, what the significance entails
+
+
+#Data
+
+This is our data, how we formatted, etc... 
+
+
+#Methods
+
+How did we perform the assessment, what did we decide to assess and why. Rationale for tests and maps
+
+
+#Results 
+
+What did we find
+
+
+#Analysis 
+
+This is the signficance of our results
+
+
+#Conclusion 
+
+Restate project objectives/purpose
+
+
+#References
+
+list in APA 7th: I don't know if we need a special thing to format the bibliography: verify on that
+
+
+
+
+
+
