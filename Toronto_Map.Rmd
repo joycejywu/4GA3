@@ -1,0 +1,73 @@
+---
+title: "Toronto_Map"
+output: html_document
+date: "2026-04-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r message=FALSE, warning=FALSE}
+library(isdas)
+library(gstat)
+library(sf)
+library(spdep)
+library(tidyverse)
+library(readxl)
+library(prettymapr)
+library(ggspatial)
+library(opendatatoronto)
+library(dplyr)
+library(jsonlite)
+library(writexl)
+library(ggplot2)
+
+```
+
+# Adding Neighbourhood Geographies
+```{r}
+package <- show_package("fc443770-ef0a-4025-9c2c-2cb558bfab00")
+package
+```
+
+```{r}
+resources <- list_package_resources("fc443770-ef0a-4025-9c2c-2cb558bfab00")
+	
+datastore_resources <- filter(resources, tolower(format) %in% c('csv', 'geojson'))
+
+torontonbh <- filter(datastore_resources, row_number()==1) %>% get_resource()
+```
+
+# Toronto Map
+```{r}
+Toronto_Map <- ggplot() +
+  annotation_map_tile(type = "osm", zoom = 11) +  
+  geom_sf(
+    data = torontonbh,
+    size = 0.2,
+    alpha = 0.2
+  ) 
+
+Toronto_Map
+```
